@@ -105,14 +105,6 @@ from processors import (
     to_excel_bytes,
 )
 
-st.set_page_config(page_title="Assurance Dashboard", layout="wide")
-
-st.title("Dashboard Assurance")
-
-tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
-    ["PPNA", "PE", "SAP", "IBNR", "PB"]
-)
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
