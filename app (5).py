@@ -113,67 +113,91 @@ tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
     ["PPNA", "PE", "SAP", "IBNR", "PB"]
 )
 
-with tab_ppna:
-    st.write("Onglet PPNA")
-    fichier = st.file_uploader("Charger le fichier PPNA", type=["xlsx", "csv"], key="ppna")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            st.write("Fichier lu avec succès")
-            detail, synthese = process_ppna(df)
-            st.write("Traitement PPNA terminé")
-            st.write("Colonnes synthèse :", synthese.columns.tolist())
-            st.dataframe(synthese.head())
-            dashboard_ppna(detail, synthese)
-        except Exception as e:
-            st.error(f"Erreur PPNA : {e}")
+def dashboard_ppna(detail_df, synthese_df):
+    st.subheader("Dashboard PPNA")
 
-with tab_pe:
-    st.write("Onglet PE")
-    fichier = st.file_uploader("Charger le fichier PE", type=["xlsx", "csv"], key="pe")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail, synthese = process_pe(df)
-            st.write("Colonnes synthèse :", synthese.columns.tolist())
-            st.dataframe(synthese.head())
-            dashboard_pe(detail, synthese)
-        except Exception as e:
-            st.error(f"Erreur PE : {e}")
+    # Copie de travail
+    df = detail_df.copy()
 
-with tab_sap:
-    st.write("Onglet SAP")
-    fichier = st.file_uploader("Charger le fichier SAP", type=["xlsx", "csv"], key="sap")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail, total = process_sap(df)
-            st.dataframe(detail.head())
-            st.dataframe(total)
-            dashboard_sap(detail, total)
-        except Exception as e:
-            st.error(f"Erreur SAP : {e}")
+    # Vérifications / conversions
+    if "echeance" in df.columns:
+        df["echeance"] = pd.to_datetime(df["echeance"], errors="coerce")
 
-with tab_ibnr:
-    st.write("Onglet IBNR")
-    fichier = st.file_uploader("Charger le fichier IBNR", type=["xlsx", "csv"], key="ibnr")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            resultats = calcul_ibnr_chain_ladder(df)
-            st.dataframe(resultats["resume_ibnr"].head())
-            dashboard_ibnr(resultats)
-        except Exception as e:
-            st.error(f"Erreur IBNR : {e}")
+    if "prime_non_acquise" in df.columns:
+        df["prime_non_acquise"] = pd.to_numeric(df["prime_non_acquise"], errors="coerce").fillna(0)
 
-with tab_pb:
-    st.write("Onglet PB")
-    fichier = st.file_uploader("Charger le fichier PB", type=["xlsx", "csv"], key="pb")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail = process_pb(df)
-            st.dataframe(detail.head())
-            dashboard_pb(detail)
-        except Exception as e:
-            st.error(f"Erreur PB : {e}")
+    # KPI
+    total_ppna = df["prime_non_acquise"].sum() if "prime_non_acquise" in df.columns else 0
+    st.metric("PPNA totale", f"{total_ppna:,.2f}")
+
+    # Filtres
+    colf1, colf2 = st.columns(2)
+
+    with colf1:
+        if "reseau" in df.columns:
+            liste_reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
+            choix_reseaux = st.multiselect("Filtrer par réseau", liste_reseaux, default=liste_reseaux)
+            df = df[df["reseau"].astype(str).isin(choix_reseaux)]
+
+    with colf2:
+        if "produit" in df.columns:
+            liste_produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
+            choix_produits = st.multiselect("Filtrer par produit", liste_produits, default=liste_produits)
+            df = df[df["produit"].astype(str).isin(choix_produits)]
+
+    # 1) Relation prime_non_acquise ~ echeance (temps)
+    if {"echeance", "prime_non_acquise"}.issubset(df.columns):
+        serie_temps = (
+            df.groupby("echeance", as_index=False)["prime_non_acquise"]
+            .sum()
+            .sort_values("echeance")
+        )
+
+        fig_time = px.line(
+            serie_temps,
+            x="echeance",
+            y="prime_non_acquise",
+            markers=True,
+            title="Prime non acquise selon l'échéance"
+        )
+        st.plotly_chart(fig_time, use_container_width=True)
+
+    # 2) Pie chart sur produit
+    if {"produit", "prime_non_acquise"}.issubset(df.columns):
+        pie_data = (
+            df.groupby("produit", as_index=False)["prime_non_acquise"]
+            .sum()
+            .sort_values("prime_non_acquise", ascending=False)
+        )
+
+        fig_pie = px.pie(
+            pie_data,
+            names="produit",
+            values="prime_non_acquise",
+            title="Répartition de la prime non acquise par produit"
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # 3) Bar plot sur réseau
+    if {"reseau", "prime_non_acquise"}.issubset(df.columns):
+        bar_data = (
+            df.groupby("reseau", as_index=False)["prime_non_acquise"]
+            .sum()
+            .sort_values("prime_non_acquise", ascending=False)
+        )
+
+        fig_bar = px.bar(
+            bar_data,
+            x="reseau",
+            y="prime_non_acquise",
+            title="Prime non acquise par réseau"
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Tableau de synthèse
+    st.subheader("Données détaillées")
+    st.dataframe(df, use_container_width=True)
+
+    if synthese_df is not None:
+        st.subheader("Synthèse PPNA")
+        st.dataframe(synthese_df, use_container_width=True)
