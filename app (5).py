@@ -92,3 +92,58 @@ if uploaded is not None:
         st.error(f"Erreur: {e}")
 else:
     st.info("Importe un fichier pour commencer.")
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from processors import (
+    process_ppna,
+    process_pe,
+    process_sap,
+    process_pb,
+    calcul_ibnr_chain_ladder,
+    to_excel_bytes,
+)
+
+st.set_page_config(page_title="Assurance Dashboard", layout="wide")
+
+st.title("Plateforme Assurance")
+
+tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
+    ["PPNA", "PE", "SAP", "IBNR", "PB"]
+)
+
+with tab_ppna:
+    fichier = st.file_uploader("Charger le fichier PPNA", type=["xlsx", "csv"], key="ppna")
+    if fichier:
+        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+        detail, synthese = process_ppna(df)
+        dashboard_ppna(detail, synthese)
+
+with tab_pe:
+    fichier = st.file_uploader("Charger le fichier PE", type=["xlsx", "csv"], key="pe")
+    if fichier:
+        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+        detail, synthese = process_pe(df)
+        dashboard_pe(detail, synthese)
+
+with tab_sap:
+    fichier = st.file_uploader("Charger le fichier SAP", type=["xlsx", "csv"], key="sap")
+    if fichier:
+        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+        detail, total = process_sap(df)
+        dashboard_sap(detail, total)
+
+with tab_ibnr:
+    fichier = st.file_uploader("Charger le fichier IBNR", type=["xlsx", "csv"], key="ibnr")
+    if fichier:
+        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+        resultats = calcul_ibnr_chain_ladder(df)
+        dashboard_ibnr(resultats)
+
+with tab_pb:
+    fichier = st.file_uploader("Charger le fichier PB", type=["xlsx", "csv"], key="pb")
+    if fichier:
+        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+        detail = process_pb(df)
+        dashboard_pb(detail)
