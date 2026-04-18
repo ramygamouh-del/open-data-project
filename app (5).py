@@ -110,18 +110,6 @@ import pandas as pd
 import plotly.express as px
 from processors import process_ppna, process_pe, process_sap
 
-
-# =========================================================
-# CONFIGURATION GENERALE
-# =========================================================
-st.set_page_config(page_title="Dashboard Assurance", layout="wide")
-st.title("Dashboard Assurance")
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from processors import process_ppna, process_pe, process_sap
-
 # =========================================================
 # CONFIGURATION GENERALE
 # =========================================================
