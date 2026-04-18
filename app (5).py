@@ -402,12 +402,6 @@ def dashboard_sap(detail_df, total_df=None):
         .sort_values("montant_sinistre_declare", ascending=False)
     )
 
-    fig_bar = px.bar(
-        agence_data,
-        x=col_agence,
-        y="montant_sinistre_declare",
-        title="Répartition du montant sinistre déclaré par agence",
-    )
     st.plotly_chart(fig_bar, use_container_width=True)
 
     time_data = (
