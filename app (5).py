@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from processors import (
     process_ppna,
     process_pe,
@@ -26,10 +27,115 @@ def read_file(file):
         return pd.read_csv(file)
     return pd.read_excel(file)
 
+
+def detect_outliers_iqr(df):
+    """
+    Détection simple des outliers sur colonnes numériques
+    avec la méthode IQR.
+    """
+    numeric_df = df.select_dtypes(include="number")
+    outlier_summary = []
+
+    if numeric_df.empty:
+        return pd.DataFrame(columns=["colonne", "nb_outliers", "pct_outliers"])
+
+    for col in numeric_df.columns:
+        series = numeric_df[col].dropna()
+
+        if series.empty:
+            outlier_summary.append({
+                "colonne": col,
+                "nb_outliers": 0,
+                "pct_outliers": 0.0
+            })
+            continue
+
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        iqr = q3 - q1
+
+        if iqr == 0:
+            nb_outliers = 0
+        else:
+            borne_inf = q1 - 1.5 * iqr
+            borne_sup = q3 + 1.5 * iqr
+            nb_outliers = ((series < borne_inf) | (series > borne_sup)).sum()
+
+        pct_outliers = (nb_outliers / len(series)) * 100 if len(series) > 0 else 0
+
+        outlier_summary.append({
+            "colonne": col,
+            "nb_outliers": int(nb_outliers),
+            "pct_outliers": round(pct_outliers, 2)
+        })
+
+    return pd.DataFrame(outlier_summary)
+
+
 if uploaded is not None:
     df = read_file(uploaded)
+
     st.subheader("Aperçu")
     st.dataframe(df.head())
+
+    # =========================
+    # QUALITE DES DONNEES
+    # =========================
+    st.subheader("Qualité des données")
+
+    nb_lignes = df.shape[0]
+    nb_colonnes = df.shape[1]
+    nb_duplicates = df.duplicated().sum()
+    nb_missing_total = df.isna().sum().sum()
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Nombre de lignes", nb_lignes)
+    col2.metric("Nombre de colonnes", nb_colonnes)
+    col3.metric("Lignes dupliquées", int(nb_duplicates))
+    col4.metric("Valeurs manquantes", int(nb_missing_total))
+
+    missing_df = pd.DataFrame({
+        "colonne": df.columns,
+        "missing_values": df.isna().sum().values,
+        "pct_missing": ((df.isna().sum().values / len(df)) * 100).round(2) if len(df) > 0 else 0
+    }).sort_values("missing_values", ascending=False)
+
+    with st.expander("Voir les valeurs manquantes par colonne"):
+        st.dataframe(missing_df)
+
+        if missing_df["missing_values"].sum() > 0:
+            fig_missing = px.bar(
+                missing_df,
+                x="colonne",
+                y="missing_values",
+                title="Valeurs manquantes par colonne"
+            )
+            st.plotly_chart(fig_missing, use_container_width=True)
+
+    with st.expander("Voir les lignes dupliquées"):
+        if nb_duplicates > 0:
+            st.dataframe(df[df.duplicated()])
+        else:
+            st.success("Aucune ligne dupliquée détectée.")
+
+    outliers_df = detect_outliers_iqr(df)
+
+    with st.expander("Voir les outliers (méthode IQR)"):
+        if not outliers_df.empty:
+            st.dataframe(outliers_df)
+
+            if outliers_df["nb_outliers"].sum() > 0:
+                fig_outliers = px.bar(
+                    outliers_df,
+                    x="colonne",
+                    y="nb_outliers",
+                    title="Nombre d'outliers par colonne numérique"
+                )
+                st.plotly_chart(fig_outliers, use_container_width=True)
+            else:
+                st.success("Aucun outlier détecté sur les colonnes numériques.")
+        else:
+            st.info("Aucune colonne numérique disponible pour la détection des outliers.")
 
     try:
         if module == "PPNA":
@@ -40,7 +146,12 @@ if uploaded is not None:
                 st.dataframe(detail.head())
                 st.subheader("Synthèse PPNA")
                 st.dataframe(synthese)
-                excel_bytes = to_excel_bytes({"detail_ppna": detail, "synthese_ppna": synthese})
+                excel_bytes = to_excel_bytes({
+                    "detail_ppna": detail,
+                    "synthese_ppna": synthese,
+                    "missing_values": missing_df,
+                    "outliers": outliers_df
+                })
                 st.download_button("Télécharger Excel PPNA", excel_bytes, "ppna_resultats.xlsx")
 
         elif module == "PE":
@@ -48,12 +159,23 @@ if uploaded is not None:
                 detail, synthese = process_pe(df)
                 st.subheader("Détail")
                 st.dataframe(detail.head())
+
                 if synthese is not None:
                     st.subheader("Synthèse PE")
                     st.dataframe(synthese)
-                    excel_bytes = to_excel_bytes({"detail_pe": detail, "synthese_pe": synthese})
+                    excel_bytes = to_excel_bytes({
+                        "detail_pe": detail,
+                        "synthese_pe": synthese,
+                        "missing_values": missing_df,
+                        "outliers": outliers_df
+                    })
                 else:
-                    excel_bytes = to_excel_bytes({"detail_pe": detail})
+                    excel_bytes = to_excel_bytes({
+                        "detail_pe": detail,
+                        "missing_values": missing_df,
+                        "outliers": outliers_df
+                    })
+
                 st.download_button("Télécharger Excel PE", excel_bytes, "pe_resultats.xlsx")
 
         elif module == "SAP":
@@ -64,7 +186,12 @@ if uploaded is not None:
                 st.dataframe(detail.head())
                 st.subheader("Total SAP")
                 st.dataframe(total)
-                excel_bytes = to_excel_bytes({"detail_sap": detail, "total_sap": total})
+                excel_bytes = to_excel_bytes({
+                    "detail_sap": detail,
+                    "total_sap": total,
+                    "missing_values": missing_df,
+                    "outliers": outliers_df
+                })
                 st.download_button("Télécharger Excel SAP", excel_bytes, "sap_resultats.xlsx")
 
         elif module == "IBNR":
@@ -77,6 +204,8 @@ if uploaded is not None:
                 st.dataframe(results["resume_ibnr"])
                 st.subheader("IBNR total")
                 st.dataframe(results["ibnr_total"])
+                results["missing_values"] = missing_df
+                results["outliers"] = outliers_df
                 excel_bytes = to_excel_bytes(results)
                 st.download_button("Télécharger Excel IBNR", excel_bytes, "ibnr_resultats.xlsx")
 
@@ -85,25 +214,18 @@ if uploaded is not None:
                 detail = process_pb(df)
                 st.subheader("Résultat PB")
                 st.dataframe(detail.head())
-                excel_bytes = to_excel_bytes({"detail_pb": detail})
+                excel_bytes = to_excel_bytes({
+                    "detail_pb": detail,
+                    "missing_values": missing_df,
+                    "outliers": outliers_df
+                })
                 st.download_button("Télécharger Excel PB", excel_bytes, "pb_resultats.xlsx")
 
     except Exception as e:
         st.error(f"Erreur: {e}")
+
 else:
     st.info("Importe un fichier pour commencer.")
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from processors import (
-    process_ppna,
-    process_pe,
-    process_sap,
-    process_pb,
-    calcul_ibnr_chain_ladder,
-    to_excel_bytes,
-)
 
 import streamlit as st
 import pandas as pd
