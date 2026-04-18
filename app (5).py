@@ -373,14 +373,14 @@ def dashboard_sap(detail_df, total_df=None):
     st.plotly_chart(fig_bar, use_container_width=True)
 
     time_data = (
-        df_filtre.groupby("annee_de_survenance_de_sinistre", as_index=False)["montant_sinistre_declare"]
+        df_filtre.groupby("annee_de_survenance_de_sinsitre", as_index=False)["montant_sinistre_declare"]
         .sum()
-        .sort_values("annee_de_survenance_de_sinistre")
+        .sort_values("annee_de_survenance_de_sinsitre")
     )
 
     fig_time = px.line(
         time_data,
-        x="annee_de_survenance_de_sinistre",
+        x="annee_de_survenance_de_sinsitre",
         y="montant_sinistre_declare",
         markers=True,
         title="Montant sinistre déclaré selon l'année de survenance du sinistre"
