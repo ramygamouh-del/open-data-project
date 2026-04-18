@@ -147,6 +147,3 @@ with tab_pb:
         df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
         detail = process_pb(df)
         dashboard_pb(detail)
-
-st.title("Nouvelle version test")
-st.write("Déploiement mis à jour")
