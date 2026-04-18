@@ -501,4 +501,80 @@ with tab_sap:
             dashboard_sap(detail_sap, total_sap)
         except Exception as e:
             st.error(f"Erreur SAP : {e}")
+if st.button("Lancer le traitement"):
+    logger = AuditLogger()
 
+    try:
+        if fichier_sap is None or fichier_est is None:
+            st.error("Les fichiers SAP et Estimations sont obligatoires.")
+        else:
+            df_sap = read_file(fichier_sap)
+            df_est = read_file(fichier_est)
+
+            df_sap_std, df_est_std = preprocess(df_sap, df_est)
+            logger.log("Prétraitement terminé")
+
+            df_merged = merge_data(df_sap_std, df_est_std, logger)
+            df_psap = compute_psap(df_merged, logger)
+            ibnr = compute_ibnr(df_psap, logger, dev_factor=dev_factor)
+
+            ppna = None
+            pb = None
+
+            if fichier_ppna is not None:
+                df_ppna = read_file(fichier_ppna)
+                ppna = compute_ppna(df_ppna, logger)
+
+            if fichier_pb is not None:
+                df_pb = read_file(fichier_pb)
+                pb = compute_pb(df_pb, logger)
+
+            report = build_actuarial_report(
+                df_psap=df_psap,
+                ibnr=ibnr,
+                ppna=ppna,
+                pb=pb,
+                logger=logger
+            )
+
+            st.subheader("Indicateurs clés")
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("PSAP", f"{df_psap['psap'].sum():,.2f}")
+            with col2:
+                st.metric("IBNR", f"{ibnr:,.2f}")
+            with col3:
+                st.metric("PPNA", f"{ppna:,.2f}" if ppna is not None else "N/A")
+            with col4:
+                st.metric("PB", f"{pb:,.2f}" if pb is not None else "N/A")
+
+            st.subheader("Bilan actuariel")
+            st.dataframe(report["bilan_actuariel"], use_container_width=True)
+
+            st.subheader("Commentaires actuariels")
+            st.dataframe(report["commentaires_bilan"], use_container_width=True)
+
+            st.subheader("Détail PSAP")
+            st.dataframe(df_psap.head(20), use_container_width=True)
+
+            st.subheader("Journal d'audit")
+            st.dataframe(report["logs_audit"], use_container_width=True)
+
+            excel_bytes = dataframe_to_excel_bytes({
+                "merged_data": df_merged,
+                "psap_detail": df_psap,
+                "bilan_actuariel": report["bilan_actuariel"],
+                "commentaires": report["commentaires_bilan"],
+                "logs_audit": report["logs_audit"],
+            })
+
+            st.download_button(
+                label="Télécharger le bilan actuariel",
+                data=excel_bytes,
+                file_name="bilan_actuariel.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    except Exception as e:
+        st.error(f"Erreur : {e}")
