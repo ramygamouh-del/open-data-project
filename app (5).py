@@ -10,7 +10,7 @@ from processors import (
 )
 
 st.set_page_config(page_title="Assurance Toolkit", layout="wide")
-st.title("Déploiement assurance")
+st.title("Plateforme assurance")
 st.write("Charge un fichier Excel ou CSV et lance le calcul souhaité.")
 
 module = st.sidebar.selectbox(
@@ -107,7 +107,7 @@ from processors import (
 
 st.set_page_config(page_title="Assurance Dashboard", layout="wide")
 
-st.title("Plateforme Assurance")
+st.title("Dashboard Assurance")
 
 tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
     ["PPNA", "PE", "SAP", "IBNR", "PB"]
