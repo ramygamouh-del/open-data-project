@@ -4,3 +4,4 @@ numpy
 openpyxl
 unidecode
 plotly
+unidecode
