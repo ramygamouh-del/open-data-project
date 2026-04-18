@@ -113,91 +113,110 @@ tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
     ["PPNA", "PE", "SAP", "IBNR", "PB"]
 )
 
-def dashboard_ppna(detail_df, synthese_df):
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+
+def dashboard_ppna(detail_df, synthese_df=None):
     st.subheader("Dashboard PPNA")
 
-    # Copie de travail
     df = detail_df.copy()
 
-    # Vérifications / conversions
-    if "echeance" in df.columns:
-        df["echeance"] = pd.to_datetime(df["echeance"], errors="coerce")
+    # Vérification des colonnes nécessaires
+    colonnes_requises = ["echeance", "prime_non_acquise", "produit", "reseau"]
+    colonnes_manquantes = [c for c in colonnes_requises if c not in df.columns]
 
-    if "prime_non_acquise" in df.columns:
-        df["prime_non_acquise"] = pd.to_numeric(df["prime_non_acquise"], errors="coerce").fillna(0)
+    if colonnes_manquantes:
+        st.error(f"Colonnes manquantes : {colonnes_manquantes}")
+        st.write("Colonnes disponibles :", df.columns.tolist())
+        return
+
+    # Conversion des types
+    df["echeance"] = pd.to_datetime(df["echeance"], errors="coerce")
+    df["prime_non_acquise"] = pd.to_numeric(df["prime_non_acquise"], errors="coerce").fillna(0)
 
     # KPI
-    total_ppna = df["prime_non_acquise"].sum() if "prime_non_acquise" in df.columns else 0
-    st.metric("PPNA totale", f"{total_ppna:,.2f}")
+    total_ppna = df["prime_non_acquise"].sum()
+    st.metric("Prime non acquise totale", f"{total_ppna:,.2f}")
 
     # Filtres
-    colf1, colf2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-    with colf1:
-        if "reseau" in df.columns:
-            liste_reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
-            choix_reseaux = st.multiselect("Filtrer par réseau", liste_reseaux, default=liste_reseaux)
-            df = df[df["reseau"].astype(str).isin(choix_reseaux)]
+    with col1:
+        reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
+        choix_reseaux = st.multiselect("Choisir le réseau", reseaux, default=reseaux)
 
-    with colf2:
-        if "produit" in df.columns:
-            liste_produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
-            choix_produits = st.multiselect("Filtrer par produit", liste_produits, default=liste_produits)
-            df = df[df["produit"].astype(str).isin(choix_produits)]
+    with col2:
+        produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
+        choix_produits = st.multiselect("Choisir le produit", produits, default=produits)
 
-    # 1) Relation prime_non_acquise ~ echeance (temps)
-    if {"echeance", "prime_non_acquise"}.issubset(df.columns):
-        serie_temps = (
-            df.groupby("echeance", as_index=False)["prime_non_acquise"]
-            .sum()
-            .sort_values("echeance")
-        )
+    df_filtre = df[
+        df["reseau"].astype(str).isin(choix_reseaux) &
+        df["produit"].astype(str).isin(choix_produits)
+    ].copy()
 
-        fig_time = px.line(
-            serie_temps,
-            x="echeance",
-            y="prime_non_acquise",
-            markers=True,
-            title="Prime non acquise selon l'échéance"
-        )
-        st.plotly_chart(fig_time, use_container_width=True)
+    # 1) Relation prime_non_acquise / echeance
+    serie_temps = (
+        df_filtre.groupby("echeance", as_index=False)["prime_non_acquise"]
+        .sum()
+        .sort_values("echeance")
+    )
+
+    fig_temps = px.line(
+        serie_temps,
+        x="echeance",
+        y="prime_non_acquise",
+        markers=True,
+        title="Prime non acquise selon l'échéance"
+    )
+    st.plotly_chart(fig_temps, use_container_width=True)
 
     # 2) Pie chart sur produit
-    if {"produit", "prime_non_acquise"}.issubset(df.columns):
-        pie_data = (
-            df.groupby("produit", as_index=False)["prime_non_acquise"]
-            .sum()
-            .sort_values("prime_non_acquise", ascending=False)
-        )
+    pie_data = (
+        df_filtre.groupby("produit", as_index=False)["prime_non_acquise"]
+        .sum()
+        .sort_values("prime_non_acquise", ascending=False)
+    )
 
-        fig_pie = px.pie(
-            pie_data,
-            names="produit",
-            values="prime_non_acquise",
-            title="Répartition de la prime non acquise par produit"
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+    fig_pie = px.pie(
+        pie_data,
+        names="produit",
+        values="prime_non_acquise",
+        title="Répartition de la prime non acquise par produit"
+    )
+    st.plotly_chart(fig_pie, use_container_width=True)
 
     # 3) Bar plot sur réseau
-    if {"reseau", "prime_non_acquise"}.issubset(df.columns):
-        bar_data = (
-            df.groupby("reseau", as_index=False)["prime_non_acquise"]
-            .sum()
-            .sort_values("prime_non_acquise", ascending=False)
-        )
+    bar_data = (
+        df_filtre.groupby("reseau", as_index=False)["prime_non_acquise"]
+        .sum()
+        .sort_values("prime_non_acquise", ascending=False)
+    )
 
-        fig_bar = px.bar(
-            bar_data,
-            x="reseau",
-            y="prime_non_acquise",
-            title="Prime non acquise par réseau"
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+    fig_bar = px.bar(
+        bar_data,
+        x="reseau",
+        y="prime_non_acquise",
+        title="Prime non acquise par réseau"
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Tableau de synthèse
-    st.subheader("Données détaillées")
-    st.dataframe(df, use_container_width=True)
+    # Tableau
+    st.subheader("Données filtrées")
+    st.dataframe(df_filtre, use_container_width=True)
 
-    if synthese_df is not None:
-        st.subheader("Synthèse PPNA")
-        st.dataframe(synthese_df, use_container_width=True)
+
+st.title("Application PPNA")
+
+fichier = st.file_uploader("Charger le fichier PPNA", type=["xlsx", "csv"])
+
+if fichier is not None:
+    if fichier.name.endswith(".xlsx"):
+        df = pd.read_excel(fichier)
+    else:
+        df = pd.read_csv(fichier)
+
+    st.write("Colonnes du fichier :", df.columns.tolist())
+
+    dashboard_ppna(df)
