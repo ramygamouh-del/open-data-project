@@ -301,13 +301,28 @@ def dashboard_pe(detail_df, synthese_df=None):
 
 # =========================================================
 # 3) DASHBOARD SAP
-# =========================================================
+
 def dashboard_sap(detail_df, total_df=None):
     st.subheader("Dashboard SAP")
 
     df = detail_df.copy()
 
-    col_agence = "agence" if "agence" in df.columns else "agences" if "agences" in df.columns else None
+    # Détection souple des noms de colonnes
+    col_agence = None
+    for c in ["agence", "agences"]:
+        if c in df.columns:
+            col_agence = c
+            break
+
+    col_annee_survenance = None
+    for c in [
+        "annee_de_survenance_de_sinistre",
+        "annee_de_survenance_de_sinsitre"
+    ]:
+        if c in df.columns:
+            col_annee_survenance = c
+            break
+
     if col_agence is None:
         st.error("Colonne agence/agences introuvable.")
         st.write("Colonnes disponibles :", df.columns.tolist())
@@ -316,7 +331,6 @@ def dashboard_sap(detail_df, total_df=None):
     colonnes_requises = [
         col_agence,
         "montant_sinistre_declare",
-        "annee_de_survenance_de_sinistre",
         "statut"
     ]
     colonnes_manquantes = [c for c in colonnes_requises if c not in df.columns]
@@ -326,38 +340,57 @@ def dashboard_sap(detail_df, total_df=None):
         st.write("Colonnes disponibles :", df.columns.tolist())
         return
 
+    if col_annee_survenance is None:
+        st.error("Colonne année de survenance du sinistre introuvable.")
+        st.write("Colonnes disponibles :", df.columns.tolist())
+        return
+
+    # Conversions
     df["montant_sinistre_declare"] = pd.to_numeric(
         df["montant_sinistre_declare"], errors="coerce"
     ).fillna(0)
 
-    df["annee_de_survenance_de_sinistre"] = pd.to_numeric(
-        df["annee_de_survenance_de_sinistre"], errors="coerce"
+    df[col_annee_survenance] = pd.to_numeric(
+        df[col_annee_survenance], errors="coerce"
     )
 
     df[col_agence] = df[col_agence].astype(str)
     df["statut"] = df["statut"].astype(str)
 
+    # KPI
     total_montant = df["montant_sinistre_declare"].sum()
     st.metric("Montant total sinistre déclaré", f"{total_montant:,.2f}")
 
     if total_df is not None and "valeur" in total_df.columns:
         st.metric("Total SAP", f"{total_df['valeur'].iloc[0]:,.2f}")
 
+    # Filtres
     col1, col2 = st.columns(2)
 
     with col1:
         liste_agences = sorted(df[col_agence].dropna().unique().tolist())
-        choix_agences = st.multiselect("Filtrer par agence", liste_agences, default=liste_agences, key="sap_agence")
+        choix_agences = st.multiselect(
+            "Filtrer par agence",
+            liste_agences,
+            default=liste_agences,
+            key="sap_agence"
+        )
 
     with col2:
         liste_statuts = sorted(df["statut"].dropna().unique().tolist())
-        choix_statuts = st.multiselect("Filtrer par statut", liste_statuts, default=liste_statuts, key="sap_statut")
+        choix_statuts = st.multiselect(
+            "Filtrer par statut",
+            liste_statuts,
+            default=liste_statuts,
+            key="sap_statut"
+        )
 
     df_filtre = df[
         df[col_agence].isin(choix_agences) &
         df["statut"].isin(choix_statuts)
     ].copy()
 
+    # 1) Bar plot : répartition des agences
     agence_data = (
         df_filtre.groupby(col_agence, as_index=False)["montant_sinistre_declare"]
         .sum()
@@ -372,21 +405,23 @@ def dashboard_sap(detail_df, total_df=None):
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
+    # 2) Série temporelle : montant sinistre selon année de survenance
     time_data = (
-        df_filtre.groupby("annee_de_survenance_de_sinsitre", as_index=False)["montant_sinistre_declare"]
+        df_filtre.groupby(col_annee_survenance, as_index=False)["montant_sinistre_declare"]
         .sum()
-        .sort_values("annee_de_survenance_de_sinsitre")
+        .sort_values(col_annee_survenance)
     )
 
     fig_time = px.line(
         time_data,
-        x="annee_de_survenance_de_sinsitre",
+        x=col_annee_survenance,
         y="montant_sinistre_declare",
         markers=True,
         title="Montant sinistre déclaré selon l'année de survenance du sinistre"
     )
     st.plotly_chart(fig_time, use_container_width=True)
 
+    # 3) Pie chart : répartition du statut
     statut_data = (
         df_filtre.groupby("statut", as_index=False)
         .size()
@@ -404,42 +439,3 @@ def dashboard_sap(detail_df, total_df=None):
 
     st.subheader("Données SAP filtrées")
     st.dataframe(df_filtre, use_container_width=True)
-
-
-# =========================================================
-# ONGLETS
-# =========================================================
-tab_ppna, tab_pe, tab_sap = st.tabs(["PPNA", "PE", "SAP"])
-
-
-with tab_ppna:
-    fichier = st.file_uploader("Charger le fichier PPNA", type=["xlsx", "csv"], key="ppna")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail, synthese = process_ppna(df)
-            dashboard_ppna(detail, synthese)
-        except Exception as e:
-            st.error(f"Erreur PPNA : {e}")
-
-
-with tab_pe:
-    fichier = st.file_uploader("Charger le fichier PE", type=["xlsx", "csv"], key="pe")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail, synthese = process_pe(df)
-            dashboard_pe(detail, synthese)
-        except Exception as e:
-            st.error(f"Erreur PE : {e}")
-
-
-with tab_sap:
-    fichier = st.file_uploader("Charger le fichier SAP", type=["xlsx", "csv"], key="sap")
-    if fichier:
-        try:
-            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-            detail, total = process_sap(df)
-            dashboard_sap(detail, total)
-        except Exception as e:
-            st.error(f"Erreur SAP : {e}")
