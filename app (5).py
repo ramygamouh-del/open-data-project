@@ -220,3 +220,98 @@ if fichier is not None:
     st.write("Colonnes du fichier :", df.columns.tolist())
 
     dashboard_ppna(df)
+
+def dashboard_pe(detail_df, synthese_df=None):
+    st.subheader("Dashboard Provision d'égalisation")
+
+    df = detail_df.copy()
+
+    # Vérification des colonnes utiles
+    colonnes_attendues = ["produit", "provision_degalisation"]
+    manquantes = [c for c in colonnes_attendues if c not in df.columns]
+
+    if manquantes:
+        st.error(f"Colonnes manquantes : {manquantes}")
+        st.write("Colonnes disponibles :", df.columns.tolist())
+        return
+
+    # Détection de la colonne année d'exercice
+    col_annee = None
+    for c in ["annees_dexercice", "annees_exercice", "annee_exercice"]:
+        if c in df.columns:
+            col_annee = c
+            break
+
+    if col_annee is None:
+        st.error("Colonne année d'exercice introuvable.")
+        st.write("Colonnes disponibles :", df.columns.tolist())
+        return
+
+    # Types
+    df["provision_degalisation"] = pd.to_numeric(
+        df["provision_degalisation"], errors="coerce"
+    ).fillna(0)
+
+    # Si année d'exercice est une date, on extrait l'année
+    dates_test = pd.to_datetime(df[col_annee], dayfirst=True, errors="coerce")
+    if dates_test.notna().sum() > 0:
+        df[col_annee] = dates_test.dt.year.fillna(df[col_annee])
+    df[col_annee] = pd.to_numeric(df[col_annee], errors="coerce")
+
+    # KPI
+    total_pe = df["provision_degalisation"].sum()
+    st.metric("Provision d'égalisation totale", f"{total_pe:,.2f}")
+
+    # Filtres
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if "reseau" in df.columns:
+            liste_reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
+            choix_reseaux = st.multiselect("Filtrer par réseau", liste_reseaux, default=liste_reseaux)
+            df = df[df["reseau"].astype(str).isin(choix_reseaux)]
+
+    with col2:
+        liste_produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
+        choix_produits = st.multiselect("Filtrer par produit", liste_produits, default=liste_produits)
+        df = df[df["produit"].astype(str).isin(choix_produits)]
+
+    # 1) Pie chart : répartition des produits
+    pie_data = (
+        df.groupby("produit", as_index=False)["provision_degalisation"]
+        .sum()
+        .sort_values("provision_degalisation", ascending=False)
+    )
+
+    fig_pie = px.pie(
+        pie_data,
+        names="produit",
+        values="provision_degalisation",
+        title="Répartition de la provision d'égalisation par produit"
+    )
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+    # 2) Série temporelle : provision_degalisation selon année d'exercice
+    time_data = (
+        df.groupby(col_annee, as_index=False)["provision_degalisation"]
+        .sum()
+        .sort_values(col_annee)
+    )
+
+    fig_time = px.line(
+        time_data,
+        x=col_annee,
+        y="provision_degalisation",
+        markers=True,
+        title="Provision d'égalisation selon l'année d'exercice"
+    )
+    st.plotly_chart(fig_time, use_container_width=True)
+
+    # Tableau détaillé
+    st.subheader("Données filtrées")
+    st.dataframe(df, use_container_width=True)
+
+    # Tableau de synthèse si fourni
+    if synthese_df is not None:
+        st.subheader("Synthèse PE")
+        st.dataframe(synthese_df, use_container_width=True)
