@@ -114,36 +114,66 @@ tab_ppna, tab_pe, tab_sap, tab_ibnr, tab_pb = st.tabs(
 )
 
 with tab_ppna:
+    st.write("Onglet PPNA")
     fichier = st.file_uploader("Charger le fichier PPNA", type=["xlsx", "csv"], key="ppna")
     if fichier:
-        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-        detail, synthese = process_ppna(df)
-        dashboard_ppna(detail, synthese)
+        try:
+            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+            st.write("Fichier lu avec succès")
+            detail, synthese = process_ppna(df)
+            st.write("Traitement PPNA terminé")
+            st.write("Colonnes synthèse :", synthese.columns.tolist())
+            st.dataframe(synthese.head())
+            dashboard_ppna(detail, synthese)
+        except Exception as e:
+            st.error(f"Erreur PPNA : {e}")
 
 with tab_pe:
+    st.write("Onglet PE")
     fichier = st.file_uploader("Charger le fichier PE", type=["xlsx", "csv"], key="pe")
     if fichier:
-        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-        detail, synthese = process_pe(df)
-        dashboard_pe(detail, synthese)
+        try:
+            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+            detail, synthese = process_pe(df)
+            st.write("Colonnes synthèse :", synthese.columns.tolist())
+            st.dataframe(synthese.head())
+            dashboard_pe(detail, synthese)
+        except Exception as e:
+            st.error(f"Erreur PE : {e}")
 
 with tab_sap:
+    st.write("Onglet SAP")
     fichier = st.file_uploader("Charger le fichier SAP", type=["xlsx", "csv"], key="sap")
     if fichier:
-        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-        detail, total = process_sap(df)
-        dashboard_sap(detail, total)
+        try:
+            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+            detail, total = process_sap(df)
+            st.dataframe(detail.head())
+            st.dataframe(total)
+            dashboard_sap(detail, total)
+        except Exception as e:
+            st.error(f"Erreur SAP : {e}")
 
 with tab_ibnr:
+    st.write("Onglet IBNR")
     fichier = st.file_uploader("Charger le fichier IBNR", type=["xlsx", "csv"], key="ibnr")
     if fichier:
-        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-        resultats = calcul_ibnr_chain_ladder(df)
-        dashboard_ibnr(resultats)
+        try:
+            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+            resultats = calcul_ibnr_chain_ladder(df)
+            st.dataframe(resultats["resume_ibnr"].head())
+            dashboard_ibnr(resultats)
+        except Exception as e:
+            st.error(f"Erreur IBNR : {e}")
 
 with tab_pb:
+    st.write("Onglet PB")
     fichier = st.file_uploader("Charger le fichier PB", type=["xlsx", "csv"], key="pb")
     if fichier:
-        df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
-        detail = process_pb(df)
-        dashboard_pb(detail)
+        try:
+            df = pd.read_excel(fichier) if fichier.name.endswith(".xlsx") else pd.read_csv(fichier)
+            detail = process_pb(df)
+            st.dataframe(detail.head())
+            dashboard_pb(detail)
+        except Exception as e:
+            st.error(f"Erreur PB : {e}")
