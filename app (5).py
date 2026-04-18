@@ -118,8 +118,25 @@ import pandas as pd
 import plotly.express as px
 from processors import process_ppna, process_pe, process_sap
 
+
+# =========================================================
+# CONFIGURATION GENERALE
+# =========================================================
 st.set_page_config(page_title="Dashboard Assurance", layout="wide")
 st.title("Dashboard Assurance")
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+def afficher_colonnes_manquantes(df, colonnes_requises):
+    colonnes_manquantes = [c for c in colonnes_requises if c not in df.columns]
+    if colonnes_manquantes:
+        st.error(f"Colonnes manquantes : {colonnes_manquantes}")
+        st.write("Colonnes disponibles :", df.columns.tolist())
+        return True
+    return False
+
 
 # =========================================================
 # 1) DASHBOARD PPNA
@@ -130,28 +147,33 @@ def dashboard_ppna(detail_df, synthese_df=None):
     df = detail_df.copy()
 
     colonnes_requises = ["echeance", "prime_non_acquise", "produit", "reseau"]
-    colonnes_manquantes = [c for c in colonnes_requises if c not in df.columns]
-
-    if colonnes_manquantes:
-        st.error(f"Colonnes manquantes : {colonnes_manquantes}")
-        st.write("Colonnes disponibles :", df.columns.tolist())
+    if afficher_colonnes_manquantes(df, colonnes_requises):
         return
 
     df["echeance"] = pd.to_datetime(df["echeance"], errors="coerce")
     df["prime_non_acquise"] = pd.to_numeric(df["prime_non_acquise"], errors="coerce").fillna(0)
 
-    total_ppna = df["prime_non_acquise"].sum()
-    st.metric("Prime non acquise totale", f"{total_ppna:,.2f}")
+    st.metric("Prime non acquise totale", f"{df['prime_non_acquise'].sum():,.2f}")
 
     col1, col2 = st.columns(2)
 
     with col1:
         reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
-        choix_reseaux = st.multiselect("Choisir le réseau", reseaux, default=reseaux, key="ppna_reseau")
+        choix_reseaux = st.multiselect(
+            "Choisir le réseau",
+            reseaux,
+            default=reseaux,
+            key="ppna_reseau",
+        )
 
     with col2:
         produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
-        choix_produits = st.multiselect("Choisir le produit", produits, default=produits, key="ppna_produit")
+        choix_produits = st.multiselect(
+            "Choisir le produit",
+            produits,
+            default=produits,
+            key="ppna_produit",
+        )
 
     df_filtre = df[
         df["reseau"].astype(str).isin(choix_reseaux) &
@@ -169,7 +191,7 @@ def dashboard_ppna(detail_df, synthese_df=None):
         x="echeance",
         y="prime_non_acquise",
         markers=True,
-        title="Prime non acquise selon l'échéance"
+        title="Prime non acquise selon l'échéance",
     )
     st.plotly_chart(fig_temps, use_container_width=True)
 
@@ -183,7 +205,7 @@ def dashboard_ppna(detail_df, synthese_df=None):
         pie_data,
         names="produit",
         values="prime_non_acquise",
-        title="Répartition de la prime non acquise par produit"
+        title="Répartition de la prime non acquise par produit",
     )
     st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -197,7 +219,7 @@ def dashboard_ppna(detail_df, synthese_df=None):
         bar_data,
         x="reseau",
         y="prime_non_acquise",
-        title="Prime non acquise par réseau"
+        title="Prime non acquise par réseau",
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -217,12 +239,8 @@ def dashboard_pe(detail_df, synthese_df=None):
 
     df = detail_df.copy()
 
-    colonnes_attendues = ["produit", "provision_degalisation"]
-    manquantes = [c for c in colonnes_attendues if c not in df.columns]
-
-    if manquantes:
-        st.error(f"Colonnes manquantes : {manquantes}")
-        st.write("Colonnes disponibles :", df.columns.tolist())
+    colonnes_requises = ["produit", "provision_degalisation"]
+    if afficher_colonnes_manquantes(df, colonnes_requises):
         return
 
     col_annee = None
@@ -246,20 +264,29 @@ def dashboard_pe(detail_df, synthese_df=None):
 
     df[col_annee] = pd.to_numeric(df[col_annee], errors="coerce")
 
-    total_pe = df["provision_degalisation"].sum()
-    st.metric("Provision d'égalisation totale", f"{total_pe:,.2f}")
+    st.metric("Provision d'égalisation totale", f"{df['provision_degalisation'].sum():,.2f}")
 
     col1, col2 = st.columns(2)
 
     with col1:
         if "reseau" in df.columns:
-            liste_reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
-            choix_reseaux = st.multiselect("Filtrer par réseau", liste_reseaux, default=liste_reseaux, key="pe_reseau")
+            reseaux = sorted(df["reseau"].dropna().astype(str).unique().tolist())
+            choix_reseaux = st.multiselect(
+                "Filtrer par réseau",
+                reseaux,
+                default=reseaux,
+                key="pe_reseau",
+            )
             df = df[df["reseau"].astype(str).isin(choix_reseaux)]
 
     with col2:
-        liste_produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
-        choix_produits = st.multiselect("Filtrer par produit", liste_produits, default=liste_produits, key="pe_produit")
+        produits = sorted(df["produit"].dropna().astype(str).unique().tolist())
+        choix_produits = st.multiselect(
+            "Filtrer par produit",
+            produits,
+            default=produits,
+            key="pe_produit",
+        )
         df = df[df["produit"].astype(str).isin(choix_produits)]
 
     pie_data = (
@@ -272,7 +299,7 @@ def dashboard_pe(detail_df, synthese_df=None):
         pie_data,
         names="produit",
         values="provision_degalisation",
-        title="Répartition de la provision d'égalisation par produit"
+        title="Répartition de la provision d'égalisation par produit",
     )
     st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -287,7 +314,7 @@ def dashboard_pe(detail_df, synthese_df=None):
         x=col_annee,
         y="provision_degalisation",
         markers=True,
-        title="Provision d'égalisation selon l'année d'exercice"
+        title="Provision d'égalisation selon l'année d'exercice",
     )
     st.plotly_chart(fig_time, use_container_width=True)
 
@@ -301,13 +328,12 @@ def dashboard_pe(detail_df, synthese_df=None):
 
 # =========================================================
 # 3) DASHBOARD SAP
-
+# =========================================================
 def dashboard_sap(detail_df, total_df=None):
     st.subheader("Dashboard SAP")
 
     df = detail_df.copy()
 
-    # Détection souple des noms de colonnes
     col_agence = None
     for c in ["agence", "agences"]:
         if c in df.columns:
@@ -317,7 +343,7 @@ def dashboard_sap(detail_df, total_df=None):
     col_annee_survenance = None
     for c in [
         "annee_de_survenance_de_sinistre",
-        "annee_de_survenance_de_sinsitre"
+        "annee_de_survenance_de_sinsitre",
     ]:
         if c in df.columns:
             col_annee_survenance = c
@@ -328,16 +354,8 @@ def dashboard_sap(detail_df, total_df=None):
         st.write("Colonnes disponibles :", df.columns.tolist())
         return
 
-    colonnes_requises = [
-        col_agence,
-        "montant_sinistre_declare",
-        "statut"
-    ]
-    colonnes_manquantes = [c for c in colonnes_requises if c not in df.columns]
-
-    if colonnes_manquantes:
-        st.error(f"Colonnes manquantes : {colonnes_manquantes}")
-        st.write("Colonnes disponibles :", df.columns.tolist())
+    colonnes_requises = [col_agence, "montant_sinistre_declare", "statut"]
+    if afficher_colonnes_manquantes(df, colonnes_requises):
         return
 
     if col_annee_survenance is None:
@@ -345,7 +363,6 @@ def dashboard_sap(detail_df, total_df=None):
         st.write("Colonnes disponibles :", df.columns.tolist())
         return
 
-    # Conversions
     df["montant_sinistre_declare"] = pd.to_numeric(
         df["montant_sinistre_declare"], errors="coerce"
     ).fillna(0)
@@ -357,32 +374,29 @@ def dashboard_sap(detail_df, total_df=None):
     df[col_agence] = df[col_agence].astype(str)
     df["statut"] = df["statut"].astype(str)
 
-    # KPI
-    total_montant = df["montant_sinistre_declare"].sum()
-    st.metric("Montant total sinistre déclaré", f"{total_montant:,.2f}")
+    st.metric("Montant total sinistre déclaré", f"{df['montant_sinistre_declare'].sum():,.2f}")
 
     if total_df is not None and "valeur" in total_df.columns:
         st.metric("Total SAP", f"{total_df['valeur'].iloc[0]:,.2f}")
 
-    # Filtres
     col1, col2 = st.columns(2)
 
     with col1:
-        liste_agences = sorted(df[col_agence].dropna().unique().tolist())
+        agences = sorted(df[col_agence].dropna().unique().tolist())
         choix_agences = st.multiselect(
             "Filtrer par agence",
-            liste_agences,
-            default=liste_agences,
-            key="sap_agence"
+            agences,
+            default=agences,
+            key="sap_agence",
         )
 
     with col2:
-        liste_statuts = sorted(df["statut"].dropna().unique().tolist())
+        statuts = sorted(df["statut"].dropna().unique().tolist())
         choix_statuts = st.multiselect(
             "Filtrer par statut",
-            liste_statuts,
-            default=liste_statuts,
-            key="sap_statut"
+            statuts,
+            default=statuts,
+            key="sap_statut",
         )
 
     df_filtre = df[
@@ -390,7 +404,6 @@ def dashboard_sap(detail_df, total_df=None):
         df["statut"].isin(choix_statuts)
     ].copy()
 
-    # 1) Bar plot : répartition des agences
     agence_data = (
         df_filtre.groupby(col_agence, as_index=False)["montant_sinistre_declare"]
         .sum()
@@ -401,11 +414,10 @@ def dashboard_sap(detail_df, total_df=None):
         agence_data,
         x=col_agence,
         y="montant_sinistre_declare",
-        title="Répartition du montant sinistre déclaré par agence"
+        title="Répartition du montant sinistre déclaré par agence",
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # 2) Série temporelle : montant sinistre selon année de survenance
     time_data = (
         df_filtre.groupby(col_annee_survenance, as_index=False)["montant_sinistre_declare"]
         .sum()
@@ -417,11 +429,10 @@ def dashboard_sap(detail_df, total_df=None):
         x=col_annee_survenance,
         y="montant_sinistre_declare",
         markers=True,
-        title="Montant sinistre déclaré selon l'année de survenance du sinistre"
+        title="Montant sinistre déclaré selon l'année de survenance du sinistre",
     )
     st.plotly_chart(fig_time, use_container_width=True)
 
-    # 3) Pie chart : répartition du statut
     statut_data = (
         df_filtre.groupby("statut", as_index=False)
         .size()
@@ -433,9 +444,84 @@ def dashboard_sap(detail_df, total_df=None):
         statut_data,
         names="statut",
         values="frequence",
-        title="Répartition des statuts"
+        title="Répartition des statuts",
     )
     st.plotly_chart(fig_pie, use_container_width=True)
 
     st.subheader("Données SAP filtrées")
     st.dataframe(df_filtre, use_container_width=True)
+
+
+# =========================================================
+# ONGLETS
+# =========================================================
+tab_ppna, tab_pe, tab_sap = st.tabs(["PPNA", "PE", "SAP"])
+
+
+# =========================================================
+# CONTENU ONGLET PPNA
+# =========================================================
+with tab_ppna:
+    fichier_ppna = st.file_uploader(
+        "Charger le fichier PPNA",
+        type=["xlsx", "csv"],
+        key="ppna",
+    )
+
+    if fichier_ppna:
+        try:
+            df_ppna = (
+                pd.read_excel(fichier_ppna)
+                if fichier_ppna.name.endswith(".xlsx")
+                else pd.read_csv(fichier_ppna)
+            )
+            detail_ppna, synthese_ppna = process_ppna(df_ppna)
+            dashboard_ppna(detail_ppna, synthese_ppna)
+        except Exception as e:
+            st.error(f"Erreur PPNA : {e}")
+
+
+# =========================================================
+# CONTENU ONGLET PE
+# =========================================================
+with tab_pe:
+    fichier_pe = st.file_uploader(
+        "Charger le fichier PE",
+        type=["xlsx", "csv"],
+        key="pe",
+    )
+
+    if fichier_pe:
+        try:
+            df_pe = (
+                pd.read_excel(fichier_pe)
+                if fichier_pe.name.endswith(".xlsx")
+                else pd.read_csv(fichier_pe)
+            )
+            detail_pe, synthese_pe = process_pe(df_pe)
+            dashboard_pe(detail_pe, synthese_pe)
+        except Exception as e:
+            st.error(f"Erreur PE : {e}")
+
+
+# =========================================================
+# CONTENU ONGLET SAP
+# =========================================================
+with tab_sap:
+    fichier_sap = st.file_uploader(
+        "Charger le fichier SAP",
+        type=["xlsx", "csv"],
+        key="sap",
+    )
+
+    if fichier_sap:
+        try:
+            df_sap = (
+                pd.read_excel(fichier_sap)
+                if fichier_sap.name.endswith(".xlsx")
+                else pd.read_csv(fichier_sap)
+            )
+            detail_sap, total_sap = process_sap(df_sap)
+            dashboard_sap(detail_sap, total_sap)
+        except Exception as e:
+            st.error(f"Erreur SAP : {e}")
